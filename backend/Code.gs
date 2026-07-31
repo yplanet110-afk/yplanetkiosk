@@ -60,7 +60,7 @@ function doGet(e) {
  *   (코드에 직접 안 적음 — 이 파일이 실수로 공개 저장소에 올라가도 안전하게)
  *
  * ★ 최초 1회 설정 (Apps Script 편집기 좌측 톱니바퀴 → 프로젝트 설정 → 스크립트 속성):
- *   SUPABASE_URL              = https://fbszzjugwpetcpdxhzbn.supabase.co
+ *   SUPABASE_URL              = https://fn.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY = (Supabase 대시보드 → Settings → API → service_role key)
  *   BACKUP_SHEET_ID           = (백업용 구글 시트 URL의 /d/ 와 /edit 사이 ID)
  *
