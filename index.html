@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>와이플래닛 키오스크</title>
+
+<!-- 구글폰트 Do Hyeon: Jua보다 가늘고 가독성 나은 라운드 폰트로 교체 (2026.07.31) -->
+<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&display=swap" rel="stylesheet">
+
+<!-- Supabase JS client (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  /* 기존 GAS 웹앱 톤 그대로: 하늘색 계열 */
+  :root {
+    --bg: #f0f8ff;
+    --primary: #219aff;
+    --primary-light: #87cefa;
+    --accent: #528cff;
+    --danger: #ff6347;
+    --success: #32cd32;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Do Hyeon', sans-serif;
+    background: var(--bg);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* 상단 탭바 */
+  #tabbar {
+    display: flex;
+    background: #fff;
+    border-bottom: 2px solid var(--primary-light);
+  }
+  #tabbar button {
+    flex: 1;
+    padding: 16px 0;
+    border: none;
+    background: none;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+  }
+  #tabbar button.active {
+    color: var(--primary);
+    border-bottom: 3px solid var(--primary);
+  }
+
+  /* 관리자 버튼: 우측 상단 고정 */
+  #adminBtn {
+    position: fixed;
+    top: 10px;
+    right: 14px;
+    font-size: 12px;
+    color: #aaa;
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 4px 8px;
+    z-index: 10;
+  }
+
+  /* 각 화면 공통 컨테이너 */
+  .screen {
+    flex: 1;
+    display: none;
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .screen.active { display: flex; flex-direction: column; align-items: center; }
+
+  /* 출석체크 PIN패드 */
+  #pinDisplay {
+    background: #fff;
+    border: 3px solid var(--primary-light);
+    border-radius: 12px;
+    font-size: 32px;
+    letter-spacing: 8px;
+    color: var(--primary);
+    padding: 16px 24px;
+    margin: 24px 0;
+    min-width: 220px;
+    text-align: center;
+  }
+  #keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 260px;
+  }
+  #keypad button {
+    padding: 20px 0;
+    font-size: 22px;
+    font-family: 'Do Hyeon', sans-serif;
+    color: #fff;
+    background: var(--primary-light);
+    border: none;
+    border-radius: 12px;
+  }
+  #keypad button.clear { background: var(--danger); font-size: 14px; }
+  #keypad button.confirm { background: var(--success); font-size: 14px; }
+
+  /* 결과 팝업 (출석 성공/실패 메시지) */
+  #resultPopup {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+  }
+  #resultPopup .box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+    max-width: 320px;
+  }
+  #resultPopup .box p { font-size: 18px; color: #333; white-space: pre-line; } /* \n 을 실제 줄바꿈으로 표시 */
+  #resultPopup .box button {
+    margin-top: 12px;
+    padding: 10px 24px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Do Hyeon', sans-serif;
+  }
+
+  .placeholder { color: #aaa; font-size: 16px; margin-top: 60px; }
+
+  /* 회원가입 폼 */
+  .form-label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-family: sans-serif; }
+  .form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--primary-light);
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 14px;
+    font-family: sans-serif;
+    box-sizing: border-box;
+  }
+  .gender-btn {
+    flex: 1;
+    padding: 10px 0;
+    border: 1px solid var(--primary-light);
+    background: #fff;
+    color: var(--primary);
+    border-radius: 8px;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 14px;
+  }
+  .gender-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  /* ===== 기기예약 화면 ===== */
+  .device-tabs {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 16px;
+  }
+  .device-tab {
+    flex: 1;
+    padding: 10px 0;
+    border: 2px solid var(--primary-light);
+    background: #fff;
+    color: var(--primary);
+    border-radius: 10px;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 14px;
+  }
+  .device-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  .slot-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+  }
+  .slot-btn {
+    padding: 10px 4px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Do Hyeon', sans-serif;
+    color: #fff;
+    text-align: center;
+  }
+  .slot-btn .t { font-size: 15px; display: block; }
+  .slot-btn .c { font-size: 11px; display: block; opacity: 0.9; font-family: sans-serif; }
+  .slot-btn.available { background: var(--primary); }
+  .slot-btn.full { background: #ccc; color: #888; }
+  .slot-btn.passed { background: #eee; color: #bbb; }
+
+  .my-res-box {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--primary-light);
+  }
+  .my-res-btn {
+    width: 100%;
+    padding: 10px 0;
+    background: #fff;
+    color: var(--primary);
+    border: 1px solid var(--primary-light);
+    border-radius: 8px;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 14px;
+  }
+  .my-res-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    font-size: 13px;
+    font-family: sans-serif;
+  }
+  .my-res-item button {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 12px;
+  }
+  .empty-note { color: #aaa; font-size: 13px; font-family: sans-serif; margin-top: 8px; }
+
+  /* ===== 대관현황 화면 ===== */
+  #rentalList {
+    width: 100%;
+    max-width: 420px;
+  }
+  .rental-item {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .rental-item .time {
+    color: var(--primary);
+    font-size: 14px;
+    min-width: 92px;
+  }
+  .rental-item .title {
+    font-family: sans-serif;
+    font-size: 14px;
+    color: #333;
+  }
+
+  /* ===== PIN 모달 (기기예약·내예약 조회에서 재사용) ===== */
+  #pinModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+  }
+  #pinModal .box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+  }
+  #pinModal .title { color: var(--accent); font-size: 16px; margin-bottom: 14px; }
+  #pinModalDisplay {
+    background: var(--bg);
+    border: 2px solid var(--primary-light);
+    border-radius: 10px;
+    font-size: 20px;
+    letter-spacing: 4px;
+    color: var(--primary);
+    padding: 10px 8px;
+    margin-bottom: 14px;
+    width: 220px;              /* 키패드(220px)랑 너비 맞춤 — 8자리에서 삐져나가던 문제 */
+    box-sizing: border-box;
+    text-align: center;
+    overflow: hidden;
+  }
+  #pinModalKeypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 220px;
+  }
+  #pinModalKeypad button {
+    padding: 14px 0;
+    font-size: 18px;
+    font-family: 'Do Hyeon', sans-serif;
+    color: #fff;
+    background: var(--primary-light);
+    border: none;
+    border-radius: 10px;
+  }
+  #pinModalKeypad button.clear { background: var(--danger); font-size: 12px; }
+  #pinModalKeypad button.confirm { background: var(--success); font-size: 12px; }
+  #pinModalCancelBtn {
+    margin-top: 12px;
+    background: none;
+    border: none;
+    color: #999;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 13px;
+  }
+
+  /* ===== 관리자모드 화면 ===== */
+  #screen-admin {
+    align-items: stretch !important; /* 좌우 2단 배치를 위해 상위 .screen.active의 center 정렬 해제 */
+  }
+  .admin-columns {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+    max-width: 640px;
+    margin: 10px auto 0;
+  }
+  .admin-col {
+    flex: 1;
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .admin-col h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    color: var(--accent);
+    text-align: center;
+  }
+  .admin-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--primary-light);
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 10px;
+    font-family: sans-serif;
+    box-sizing: border-box;
+  }
+  .snack-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .snack-btn {
+    padding: 10px 0;
+    border: 1px solid var(--primary-light);
+    background: #fff;
+    color: var(--primary);
+    border-radius: 8px;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 13px;
+  }
+  .snack-btn.active { background: var(--primary); color: #fff; }
+  .admin-action-btn {
+    width: 100%;
+    padding: 12px 0;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 15px;
+  }
+  .admin-action-btn.snack { background: var(--danger); }
+  .admin-action-btn.bonus { background: var(--success); }
+  #adminBackBtn {
+    margin: 16px auto 0;
+    display: block;
+    background: none;
+    border: none;
+    color: #999;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<!-- 관리자 모드 진입 버튼: 추후 PIN 확인 후 관리자 화면으로 전환 예정 -->
+<button id="adminBtn">관리자</button>
+
+<!-- 탭바: 5개 화면 전환 -->
+<div id="tabbar">
+  <button class="tab-btn active" data-screen="checkin">출석체크</button>
+  <button class="tab-btn" data-screen="signup">회원가입</button>
+  <button class="tab-btn" data-screen="reserve">기기예약</button>
+  <button class="tab-btn" data-screen="rental">대관현황</button>
+</div>
+
+<!-- 출석체크 화면: 유일하게 이번 단계에서 실제 동작 구현 -->
+<div id="screen-checkin" class="screen active">
+  <div style="color: var(--accent); font-size: 20px; margin-top: 10px;">회원번호를 입력해주세요</div>
+  <div id="pinDisplay">______</div>
+  <div id="keypad"></div>
+  <div style="margin-top: 14px; font-size: 13px; color: var(--primary);">
+    신규 회원이신가요? <span style="text-decoration: underline; cursor: pointer;" onclick="switchScreen('signup')">가입하기</span>
+  </div>
+</div>
+
+<!-- 아래 3개 화면은 다음 단계에서 구현 예정, 지금은 자리만 -->
+<div id="screen-signup" class="screen">
+  <div style="color: var(--accent); font-size: 20px; margin: 10px 0 20px;">회원가입</div>
+  <div style="width: 280px;">
+    <label class="form-label">이름</label>
+    <input type="text" id="su-name" class="form-input" placeholder="이름 입력">
+
+    <label class="form-label">생년월일</label>
+    <input type="date" id="su-birth" class="form-input">
+
+    <label class="form-label">성별</label>
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button type="button" class="gender-btn active" data-gender="남" onclick="selectGender('남')">남</button>
+      <button type="button" class="gender-btn" data-gender="여" onclick="selectGender('여')">여</button>
+    </div>
+
+    <label class="form-label">원하는 회원번호(6자리)</label>
+    <input type="text" id="su-memberno" class="form-input" maxlength="6" inputmode="numeric" placeholder="숫자 6자리">
+    <div id="su-error" style="color: var(--danger); font-size: 12px; margin: -8px 0 10px; display:none;"></div>
+
+    <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; margin-bottom:20px;">
+      <input type="checkbox" id="su-consent" style="width:16px; height:16px;">
+      개인정보 제공에 동의합니다
+    </label>
+
+    <button type="button" onclick="submitSignup()" style="width:100%; padding:14px 0; background: var(--success); color:#fff; border:none; border-radius:10px; font-family:'Do Hyeon',sans-serif; font-size:16px;">가입 완료</button>
+  </div>
+</div>
+<div id="screen-reserve" class="screen">
+  <div id="deviceTabs" class="device-tabs"></div>
+  <div id="slotGrid" class="slot-grid"></div>
+  <div class="my-res-box">
+    <button id="myResBtn" class="my-res-btn" type="button">내 예약 확인 / 취소</button>
+    <div id="myResList"></div>
+  </div>
+</div>
+<div id="screen-rental" class="screen">
+  <div id="roomTabs" class="device-tabs"></div>
+  <div id="rentalList"></div>
+</div>
+
+<!-- 관리자모드: 탭바에 없고 우측상단 '관리자' 버튼 + PIN 확인으로만 진입 -->
+<div id="screen-admin" class="screen">
+  <div class="admin-columns">
+    <div class="admin-col">
+      <h3>간식 차감</h3>
+      <button type="button" id="snack-memberno-btn" class="admin-input" style="text-align:left; cursor:pointer;">회원번호 입력하기</button>
+      <div class="snack-grid" id="snackGrid"></div>
+      <input type="text" id="snack-custom" class="admin-input" placeholder="기타 품목 직접입력" style="display:none;">
+      <input type="number" id="snack-points" class="admin-input" placeholder="차감 포인트" min="1">
+      <button type="button" id="snackSubmitBtn" class="admin-action-btn snack">간식 차감</button>
+    </div>
+    <div class="admin-col">
+      <h3>보너스 부여</h3>
+      <button type="button" id="bonus-memberno-btn" class="admin-input" style="text-align:left; cursor:pointer;">회원번호 입력하기</button>
+      <div class="empty-note" style="margin: 0 0 14px;">퀴즈 통과한 회원에게 오늘 예약 +1회 부여</div>
+      <button type="button" id="bonusSubmitBtn" class="admin-action-btn bonus">보너스 부여</button>
+    </div>
+  </div>
+  <button type="button" id="adminBackBtn">← 나가기</button>
+</div>
+
+<!-- 회원번호(PIN) 입력 모달: 기기예약 확정 / 내 예약 조회 시 공용으로 사용 -->
+<div id="pinModal">
+  <div class="box">
+    <div class="title" id="pinModalTitle">회원번호를 입력해주세요</div>
+    <div id="pinModalDisplay">______</div>
+    <div id="pinModalKeypad"></div>
+    <button id="pinModalCancelBtn" type="button">취소</button>
+  </div>
+</div>
+
+<!-- 출석 결과 팝업 -->
+<div id="resultPopup">
+  <div class="box">
+    <p id="resultMessage"></p>
+    <button onclick="closePopup()">확인</button>
+  </div>
+</div>
+
+<script>
+  // ===== Supabase 클라이언트 초기화 =====
+  // anon key는 공개되어도 되는 값 (RLS + RPC로 실제 보안 처리, 기획서 3-4 참고)
+  // 주의: CDN 스크립트가 전역에 이미 'supabase'라는 이름을 심어놓기 때문에(window.supabase.createClient로 접근하는 그 객체),
+  // 우리 쪽에서도 변수명을 'supabase'로 지으면 var/const(let) 충돌로 SyntaxError가 나서 스크립트 전체가 멈춘다.
+  // 그래서 우리 클라이언트 변수명은 'supabaseClient'로 분리한다. (키패드 안 뜨던 원인 최종 수정)
+  const SUPABASE_URL = 'https://fbszzjugwpetcpdxhzbn.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZic3p6anVnd3BldGNwZHhoemJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzODYyODQsImV4cCI6MjEwMDk2MjI4NH0.xyE_SM4rCaz-1qZ2cKOvqBmnJEPuyvTxTmxrS2ne_Qo';
+  let supabaseClient = null;
+  try {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.error('Supabase 클라이언트 초기화 실패 — CDN 로드 확인 필요:', e);
+  }
+
+  // ===== 탭 전환 로직 =====
+  function switchScreen(name) {
+    // 모든 화면 숨기고 선택한 화면만 표시
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    // 탭바 버튼 활성 표시도 동기화
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.screen === name);
+    });
+    // 기기예약 탭 들어갈 때마다 잔여인원 최신값으로 새로고침
+    if (name === 'reserve') loadSlots();
+    // 대관현황 탭 들어갈 때마다 오늘 일정 새로고침
+    if (name === 'rental') loadRoomSchedule();
+  }
+  // 탭 버튼 클릭 이벤트 등록 (정적 페이지라 CSP 제약 없음 → addEventListener 관례상 유지)
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchScreen(btn.dataset.screen));
+  });
+
+  // ===== 출석체크 PIN패드 =====
+  let pinInput = ''; // 현재 입력 중인 회원번호 (최대 6자리 가정, members 회원번호 형식에 맞춰 조정 필요)
+  const PIN_LENGTH = 6;
+
+  function renderPinDisplay() {
+    // 입력한 자리는 숫자로, 안 입력한 자리는 _ 로 표시
+    const padded = pinInput.padEnd(PIN_LENGTH, '_').split('').join(' ');
+    document.getElementById('pinDisplay').textContent = padded;
+  }
+
+  function buildKeypad() {
+    const keypad = document.getElementById('keypad');
+    const keys = ['1','2','3','4','5','6','7','8','9','지움','0','확인'];
+    keys.forEach(key => {
+      const btn = document.createElement('button');
+      btn.textContent = key;
+      if (key === '지움') btn.classList.add('clear');
+      if (key === '확인') btn.classList.add('confirm');
+      btn.addEventListener('click', () => handleKeyPress(key));
+      keypad.appendChild(btn);
+    });
+  }
+
+  function handleKeyPress(key) {
+    if (key === '지움') {
+      pinInput = pinInput.slice(0, -1); // 마지막 한 글자만 삭제
+    } else if (key === '확인') {
+      submitCheckIn();
+    } else if (pinInput.length < PIN_LENGTH) {
+      pinInput += key;
+    }
+    renderPinDisplay();
+  }
+
+  // ===== 출석 RPC 호출 (check_in) =====
+  async function submitCheckIn() {
+    if (pinInput.length !== PIN_LENGTH) {
+      showResult('회원번호 ' + PIN_LENGTH + '자리를 모두 입력해주세요.');
+      return;
+    }
+    if (!supabaseClient) { // Supabase 연결 자체가 안 된 상태 (CDN 로드 실패 등)
+      showResult('시스템 연결에 실패했습니다. 직원에게 문의해주세요.');
+      return;
+    }
+    // supabase_rpc_functions.sql의 check_in(p_member_no) 시그니처에 맞춰 호출
+    const { data, error } = await supabaseClient.rpc('check_in', { p_member_no: pinInput });
+
+    if (error) {
+      // 네트워크 오류 등 RPC 자체 실패
+      showResult('오류가 발생했습니다. 직원에게 문의해주세요.');
+      console.error(error);
+    } else if (data && data.success === false) {
+      // RPC가 정상 응답했지만 로직상 실패 (예: 회원번호 없음, 오늘 이미 출석) → data.error에 메시지 들어있음
+      showResult(data.error || '출석 처리에 실패했습니다.');
+    } else {
+      // 성공: check_in이 돌려주는 필드는 name(이름), points_earned(획득포인트), messages(문구 배열)
+      let msg = data.name + '님, 출석 완료! (+' + data.points_earned + 'P)';
+      if (data.messages && data.messages.length > 0) {
+        msg += '\n' + data.messages.join('\n'); // 생일축하·N번째방문·랜덤문구 등을 줄바꿈으로 이어붙임
+      }
+      showResult(msg);
+    }
+    pinInput = '';
+    renderPinDisplay();
+  }
+
+  function showResult(msg) {
+    document.getElementById('resultMessage').textContent = msg;
+    document.getElementById('resultPopup').style.display = 'flex';
+  }
+  function closePopup() {
+    document.getElementById('resultPopup').style.display = 'none';
+  }
+
+  // ===== 초기화 =====
+  buildKeypad();
+  renderPinDisplay();
+
+  // ===== 회원가입 =====
+  let selectedGender = '남'; // 기본값, 버튼 클릭으로 전환
+
+  function selectGender(g) {
+    selectedGender = g;
+    document.querySelectorAll('.gender-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.gender === g);
+    });
+  }
+
+  async function submitSignup() {
+    const name = document.getElementById('su-name').value.trim();
+    const birth = document.getElementById('su-birth').value; // YYYY-MM-DD 형식 그대로 DB로 전달 가능
+    const memberNo = document.getElementById('su-memberno').value.trim();
+    const consent = document.getElementById('su-consent').checked;
+    const errorBox = document.getElementById('su-error');
+    errorBox.style.display = 'none';
+
+    // 프론트에서 1차로 걸러주고, 최종 검증은 RPC(sign_up_member)가 다시 함
+    if (!name || !birth || memberNo.length !== 6) {
+      errorBox.textContent = '이름·생년월일·회원번호(6자리)를 모두 입력해주세요.';
+      errorBox.style.display = 'block';
+      return;
+    }
+    if (!supabaseClient) { // Supabase 연결 자체가 안 된 상태 (CDN 로드 실패 등)
+      errorBox.textContent = '시스템 연결에 실패했습니다. 직원에게 문의해주세요.';
+      errorBox.style.display = 'block';
+      return;
+    }
+
+    const { data, error } = await supabaseClient.rpc('sign_up_member', {
+      p_name: name,
+      p_birth_date: birth,
+      p_gender: selectedGender,
+      p_member_no: memberNo,
+      p_consent: consent
+    });
+
+    if (error) {
+      errorBox.textContent = '오류가 발생했습니다. 직원에게 문의해주세요.';
+      errorBox.style.display = 'block';
+      console.error(error);
+      return;
+    }
+    if (data.success === false) {
+      // 회원번호 중복, 동의 안 함 등 sign_up_member가 돌려주는 에러 메시지 그대로 표시
+      errorBox.textContent = data.error;
+      errorBox.style.display = 'block';
+      return;
+    }
+
+    // 성공: 입력값 초기화하고 출석체크 화면으로 안내
+    showResult(data.name + '님, 가입이 완료되었습니다!\n회원번호: ' + memberNo + '\n꼭 기억해주세요.');
+    document.getElementById('su-name').value = '';
+    document.getElementById('su-birth').value = '';
+    document.getElementById('su-memberno').value = '';
+    document.getElementById('su-consent').checked = false;
+    switchScreen('checkin');
+  }
+
+  // ===== 기기예약 =====
+  // 기기 탭 표시 순서 고정 (get_slots가 주는 순서는 devices 테이블 id순이라 화면 순서 보장 안 됨)
+  const DEVICE_ORDER = ['닌텐도', '노래방', '오락기', '스팀'];
+  // 기기별 고유 색상 (탭 활성화 표시 + 예약 가능 슬롯 배경에 사용)
+  const DEVICE_COLORS = {
+    '닌텐도': '#219aff',  // 사이트 기본 파랑
+    '노래방': '#ff6fa5',  // 핑크
+    '오락기': '#ffa63d',  // 오렌지
+    '스팀':   '#7c5cff'   // 보라
+  };
+  let slotsByDevice = {};  // { '닌텐도': { device_id, slots: [{slot_start, capacity, remaining}] }, ... }
+  let selectedDevice = null;
+  let currentMemberPin = ''; // 내 예약 조회 성공 후, 재입력 없이 취소 버튼에 재사용
+
+  // 오늘 날짜를 'YYYY-MM-DD'로 (서버와 동일하게 서울 기준)
+  function getTodaySeoul() {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(new Date());
+    const y = parts.find(p => p.type === 'year').value;
+    const m = parts.find(p => p.type === 'month').value;
+    const d = parts.find(p => p.type === 'day').value;
+    return `${y}-${m}-${d}`;
+  }
+
+  // 지금 서울 시각을 'HH:MM'으로 (지나간 슬롯 비활성화 판단용)
+  function getNowSeoulHM() {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date());
+    const h = parts.find(p => p.type === 'hour').value;
+    const min = parts.find(p => p.type === 'minute').value;
+    return `${h}:${min}`;
+  }
+
+  // Postgres time '14:00:00' → 화면 표시용 '14:00'
+  function formatSlotTime(t) {
+    return t.slice(0, 5);
+  }
+
+  async function loadSlots() {
+    if (!supabaseClient) return;
+    const todayStr = getTodaySeoul();
+    const { data, error } = await supabaseClient.rpc('get_slots', { p_date: todayStr });
+    if (error) {
+      console.error(error);
+      document.getElementById('slotGrid').innerHTML = '<div class="empty-note">슬롯 정보를 불러오지 못했습니다.</div>';
+      return;
+    }
+    if (data.is_open === false) {
+      document.getElementById('deviceTabs').innerHTML = '';
+      document.getElementById('slotGrid').innerHTML = '<div class="empty-note">오늘은 휴관일입니다.</div>';
+      return;
+    }
+    // device 이름 기준으로 슬롯 재그룹핑
+    slotsByDevice = {};
+    data.slots.forEach(s => {
+      if (!slotsByDevice[s.device]) slotsByDevice[s.device] = { device_id: s.device_id, slots: [] };
+      slotsByDevice[s.device].slots.push(s);
+    });
+    // 처음 로드면 첫 번째 존재하는 기기를 기본 선택
+    if (!selectedDevice || !slotsByDevice[selectedDevice]) {
+      selectedDevice = DEVICE_ORDER.find(d => slotsByDevice[d]) || Object.keys(slotsByDevice)[0];
+    }
+    renderDeviceTabs();
+    renderSlotGrid();
+  }
+
+  function renderDeviceTabs() {
+    const wrap = document.getElementById('deviceTabs');
+    wrap.innerHTML = '';
+    DEVICE_ORDER.filter(d => slotsByDevice[d]).forEach(name => {
+      const btn = document.createElement('button');
+      const isActive = name === selectedDevice;
+      const color = DEVICE_COLORS[name] || 'var(--primary)';
+      btn.className = 'device-tab' + (isActive ? ' active' : '');
+      btn.style.borderColor = color;
+      btn.style.color = isActive ? '#fff' : color;
+      btn.style.background = isActive ? color : '#fff';
+      btn.textContent = name;
+      btn.addEventListener('click', () => { selectedDevice = name; renderDeviceTabs(); renderSlotGrid(); });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function renderSlotGrid() {
+    const grid = document.getElementById('slotGrid');
+    grid.innerHTML = '';
+    const info = slotsByDevice[selectedDevice];
+    if (!info) { grid.innerHTML = '<div class="empty-note">예약 가능한 기기가 없습니다.</div>'; return; }
+    const nowHM = getNowSeoulHM();
+    info.slots.forEach(s => {
+      const timeLabel = formatSlotTime(s.slot_start);
+      const isPassed = timeLabel < nowHM; // 문자열 비교로 충분 ('HH:MM' 포맷 고정)
+      const isFull = s.remaining <= 0;
+      const btn = document.createElement('button');
+      btn.className = 'slot-btn ' + (isPassed ? 'passed' : (isFull ? 'full' : 'available'));
+      btn.innerHTML = `<span class="t">${timeLabel}</span><span class="c">${isPassed ? '마감' : (s.remaining + '/' + s.capacity)}</span>`;
+      if (!isPassed && !isFull) {
+        btn.style.background = DEVICE_COLORS[selectedDevice] || 'var(--primary)'; // 기기별 색상
+        btn.addEventListener('click', () => {
+          openPinModal('예약할 회원번호를 입력해주세요', (pin) => reserveSlot(info.device_id, s.slot_start, pin));
+        });
+      } else {
+        btn.disabled = true;
+      }
+      grid.appendChild(btn);
+    });
+  }
+
+  async function reserveSlot(deviceId, slotStart, pin) {
+    const todayStr = getTodaySeoul();
+    const { data, error } = await supabaseClient.rpc('create_reservation', {
+      p_member_no: pin, p_device_id: deviceId, p_slot_date: todayStr, p_slot_start: slotStart
+    });
+    if (error) {
+      showResult('오류가 발생했습니다. 직원에게 문의해주세요.');
+      console.error(error);
+      return;
+    }
+    showResult(data.success ? data.message : data.error);
+    loadSlots(); // 잔여인원 갱신
+  }
+
+  // ===== 내 예약 조회 / 취소 =====
+  document.getElementById('myResBtn').addEventListener('click', () => {
+    openPinModal('내 예약을 확인할 회원번호를 입력해주세요', (pin) => loadMyReservations(pin));
+  });
+
+  async function loadMyReservations(pin) {
+    const { data, error } = await supabaseClient.rpc('get_my_reservations', { p_member_no: pin });
+    const listEl = document.getElementById('myResList');
+    if (error) {
+      listEl.innerHTML = '<div class="empty-note">조회에 실패했습니다.</div>';
+      console.error(error);
+      return;
+    }
+    if (data.success === false) {
+      listEl.innerHTML = `<div class="empty-note">${data.error}</div>`;
+      return;
+    }
+    currentMemberPin = pin; // 취소 버튼에서 재사용 (같은 키오스크 세션 내에서만)
+    if (data.reservations.length === 0) {
+      listEl.innerHTML = '<div class="empty-note">오늘 예약이 없습니다.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    data.reservations.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'my-res-item';
+      row.innerHTML = `<span>${r.device} ${formatSlotTime(r.slot_start)}</span>`;
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = '취소';
+      cancelBtn.addEventListener('click', () => cancelMyReservation(r.id));
+      row.appendChild(cancelBtn);
+      listEl.appendChild(row);
+    });
+  }
+
+  async function cancelMyReservation(reservationId) {
+    const { data, error } = await supabaseClient.rpc('cancel_reservation', {
+      p_member_no: currentMemberPin, p_reservation_id: reservationId
+    });
+    if (error) {
+      showResult('오류가 발생했습니다. 직원에게 문의해주세요.');
+      console.error(error);
+      return;
+    }
+    showResult(data.success ? data.message : data.error);
+    loadMyReservations(currentMemberPin); // 목록 갱신
+    loadSlots(); // 잔여인원 갱신
+  }
+
+  // ===== PIN 입력 모달 (기기예약/내예약조회는 6자리 고정배열, 관리자모드는 8자리 랜덤셔플+마스킹으로 공용 사용) =====
+  let pinModalInput = '';
+  let pinModalOnConfirm = null;
+  let pinModalLength = 6; // 열 때마다 openPinModal의 length 옵션으로 갱신됨
+  let pinModalMask = false; // true면 입력값을 ●로 가려서 표시 (관리자 PIN 등 노출되면 안 되는 값)
+
+  function openPinModal(title, onConfirm, opts) {
+    opts = opts || {};
+    pinModalInput = '';
+    pinModalOnConfirm = onConfirm;
+    pinModalLength = opts.length || 6;
+    pinModalMask = !!opts.mask;
+    document.getElementById('pinModalTitle').textContent = title;
+    renderPinModalDisplay();
+    buildPinModalKeypad(!!opts.shuffle); // 열 때마다 새로 그림 — 셔플 모드는 매번 배열이 달라야 하므로
+    document.getElementById('pinModal').style.display = 'flex';
+  }
+  function closePinModal() {
+    document.getElementById('pinModal').style.display = 'none';
+    pinModalOnConfirm = null;
+  }
+  function renderPinModalDisplay() {
+    // 마스킹 모드면 입력한 자리 수만큼 ●로, 아니면 기존처럼 실제 숫자로 표시
+    // 간격은 CSS letter-spacing 하나로만 처리 (예전엔 여기서 공백도 넣고 CSS도 더해서 8자리에서 이중으로 벌어졌음)
+    const shown = pinModalMask ? '●'.repeat(pinModalInput.length) : pinModalInput;
+    document.getElementById('pinModalDisplay').textContent = shown.padEnd(pinModalLength, '_');
+  }
+  // 0~9를 무작위로 섞은 배열 반환 (Fisher–Yates)
+  function shuffledDigits() {
+    const arr = ['0','1','2','3','4','5','6','7','8','9'];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  function buildPinModalKeypad(shuffle) {
+    const keypad = document.getElementById('pinModalKeypad');
+    keypad.innerHTML = ''; // 이전 배열 지우고 새로 그림
+    // 숫자 10개(0~9)를 어떤 순서로 배치할지 결정: 관리자모드는 매번 랜덤(어깨너머 훔쳐보기 방지), 일반은 늘 같은 순서
+    const digits = shuffle ? shuffledDigits() : ['1','2','3','4','5','6','7','8','9','0'];
+    // 12칸 그리드: 지움/확인은 항상 좌하단·우하단 고정(조작 편의), 숫자 10개만 나머지 칸에 배치
+    const layout = [
+      digits[0], digits[1], digits[2],
+      digits[3], digits[4], digits[5],
+      digits[6], digits[7], digits[8],
+      '지움',    digits[9], '확인'
+    ];
+    layout.forEach(key => {
+      const btn = document.createElement('button');
+      btn.textContent = key;
+      if (key === '지움') btn.classList.add('clear');
+      if (key === '확인') btn.classList.add('confirm');
+      btn.addEventListener('click', () => {
+        if (key === '지움') {
+          pinModalInput = pinModalInput.slice(0, -1);
+        } else if (key === '확인') {
+          if (pinModalInput.length !== pinModalLength) return; // 자리 다 안 채웠으면 무시
+          const cb = pinModalOnConfirm;
+          const pin = pinModalInput;
+          closePinModal();
+          if (cb) cb(pin);
+          return;
+        } else if (pinModalInput.length < pinModalLength) {
+          pinModalInput += key;
+        }
+        renderPinModalDisplay();
+      });
+      keypad.appendChild(btn);
+    });
+  }
+  document.getElementById('pinModalCancelBtn').addEventListener('click', closePinModal);
+
+  // ===== 관리자모드 =====
+  let adminStaffPin = ''; // PIN 게이트 통과 시 입력값 저장, 관리자모드 화면 내 액션에서 재사용 (틀리면 각 RPC가 서버에서 거부)
+  const SNACK_ITEMS = ['과자', '라면', '사탕', '젤리', '식빵', '기타'];
+  let selectedSnack = null;
+
+  document.getElementById('adminBtn').addEventListener('click', () => {
+    // 관리자 PIN(8자리)은 매번 배열을 섞어서 어깨너머 훔쳐보기를 막음
+    openPinModal('직원 PIN을 입력해주세요', (pin) => {
+      adminStaffPin = pin;
+      switchScreen('admin');
+    }, { length: 8, shuffle: true, mask: true });
+  });
+
+  document.getElementById('adminBackBtn').addEventListener('click', () => {
+    adminStaffPin = ''; // 나갈 때 세션에서 PIN 제거
+    snackMemberNo = '';
+    bonusMemberNo = '';
+    document.getElementById('snack-memberno-btn').textContent = '회원번호 입력하기';
+    document.getElementById('bonus-memberno-btn').textContent = '회원번호 입력하기';
+    switchScreen('checkin');
+  });
+
+  // 간식차감 회원번호: 보너스부여와 동일하게 키패드 모달로 입력
+  let snackMemberNo = '';
+  document.getElementById('snack-memberno-btn').addEventListener('click', () => {
+    openPinModal('간식 차감할 회원번호를 입력해주세요', (pin) => {
+      snackMemberNo = pin;
+      document.getElementById('snack-memberno-btn').textContent = pin;
+    }, { length: 6 });
+  });
+
+  // 보너스부여 회원번호: 기기예약과 동일한 키패드 모달로 입력 (텍스트 입력 대신)
+  let bonusMemberNo = '';
+  document.getElementById('bonus-memberno-btn').addEventListener('click', () => {
+    openPinModal('보너스를 부여할 회원번호를 입력해주세요', (pin) => {
+      bonusMemberNo = pin;
+      document.getElementById('bonus-memberno-btn').textContent = pin; // 확인 차원에서 그대로 표시 (민감정보 아님)
+    }, { length: 6 }); // shuffle/mask 없음 — 회원 본인 번호라 기존 키패드와 동일하게
+  });
+
+  function renderSnackGrid() {
+    const grid = document.getElementById('snackGrid');
+    grid.innerHTML = '';
+    SNACK_ITEMS.forEach(item => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'snack-btn' + (item === selectedSnack ? ' active' : '');
+      btn.textContent = item;
+      btn.addEventListener('click', () => {
+        selectedSnack = item;
+        document.getElementById('snack-custom').style.display = (item === '기타') ? 'block' : 'none';
+        renderSnackGrid();
+      });
+      grid.appendChild(btn);
+    });
+  }
+  renderSnackGrid();
+
+  document.getElementById('snackSubmitBtn').addEventListener('click', async () => {
+    const memberNo = snackMemberNo;
+    const points = parseInt(document.getElementById('snack-points').value, 10);
+    const item = selectedSnack === '기타'
+      ? document.getElementById('snack-custom').value.trim()
+      : selectedSnack;
+
+    if (!memberNo || memberNo.length !== 6) { showResult('회원번호 6자리를 입력해주세요.'); return; }
+    if (!item) { showResult('간식 항목을 선택해주세요.'); return; }
+    if (!points || points <= 0) { showResult('차감 포인트를 1 이상 입력해주세요.'); return; }
+
+    const { data, error } = await supabaseClient.rpc('deduct_snack', {
+      p_staff_pin: adminStaffPin, p_member_no: memberNo, p_points: points, p_item: item
+    });
+    if (error) { showResult('오류가 발생했습니다.'); console.error(error); return; }
+    handleAdminResult(data);
+    if (data.success) {
+      // 성공 시 다음 입력을 위해 폼 초기화 (PIN은 유지)
+      snackMemberNo = '';
+      document.getElementById('snack-memberno-btn').textContent = '회원번호 입력하기';
+      document.getElementById('snack-points').value = '';
+      document.getElementById('snack-custom').value = '';
+      selectedSnack = null;
+      renderSnackGrid();
+      document.getElementById('snack-custom').style.display = 'none';
+    }
+  });
+
+  document.getElementById('bonusSubmitBtn').addEventListener('click', async () => {
+    const memberNo = bonusMemberNo;
+    if (!memberNo || memberNo.length !== 6) { showResult('회원번호 6자리를 입력해주세요.'); return; }
+
+    const { data, error } = await supabaseClient.rpc('grant_bonus', {
+      p_staff_pin: adminStaffPin, p_member_no: memberNo
+    });
+    if (error) { showResult('오류가 발생했습니다.'); console.error(error); return; }
+    handleAdminResult(data);
+    if (data.success) {
+      bonusMemberNo = '';
+      document.getElementById('bonus-memberno-btn').textContent = '회원번호 입력하기';
+    }
+  });
+
+  // 관리자 액션 공통 결과 처리: PIN 자체가 틀렸으면 세션에서 지우고 입구로 돌려보냄
+  function handleAdminResult(data) {
+    showResult(data.success ? data.message : data.error);
+    if (data.success === false && (data.error || '').indexOf('PIN') !== -1) {
+      adminStaffPin = '';
+      switchScreen('checkin');
+    }
+  }
+
+  // ===== 대관현황 =====
+  // TODO: GAS 웹앱 배포 후 나온 /exec URL을 여기 채워넣기 (Code.gs 배포 가이드 참고)
+  const RENTAL_API_URL = 'https://script.google.com/macros/s/AKfycbzf7mjia26cTsol-6iqzRYl1stL203JrMtYx2g_3Gwk9Jt8e-ZpaS48Pr7bd9BMN2c/exec';
+
+  const ROOM_ORDER = ['와이랩1', '와이레코딩', '와이스타', '와이스테이지1', '와이스테이지2', '와이스튜디오'];
+  let roomSchedule = {};      // { '와이랩1': [{title, start, end}], ... }
+  let selectedRoom = ROOM_ORDER[0];
+  let roomTabsBuilt = false;  // 탭 버튼은 한 번만 그리면 되므로 (일정만 계속 새로고침)
+
+  function renderRoomTabs() {
+    const wrap = document.getElementById('roomTabs');
+    wrap.innerHTML = '';
+    ROOM_ORDER.forEach(name => {
+      const btn = document.createElement('button');
+      const isActive = name === selectedRoom;
+      btn.className = 'device-tab' + (isActive ? ' active' : '');
+      btn.textContent = name;
+      btn.addEventListener('click', () => { selectedRoom = name; renderRoomTabs(); renderRoomList(); });
+      wrap.appendChild(btn);
+    });
+    roomTabsBuilt = true;
+  }
+
+  function renderRoomList() {
+    const listEl = document.getElementById('rentalList');
+    const events = roomSchedule[selectedRoom];
+    if (!events) { listEl.innerHTML = '<div class="empty-note">일정 정보를 불러오지 못했습니다.</div>'; return; }
+    if (events.error) { listEl.innerHTML = `<div class="empty-note">${events.error}</div>`; return; }
+    if (events.length === 0) { listEl.innerHTML = '<div class="empty-note">오늘 예정된 대관이 없습니다.</div>'; return; }
+    listEl.innerHTML = '';
+    events.forEach(ev => {
+      const row = document.createElement('div');
+      row.className = 'rental-item';
+      row.innerHTML = `<span class="time">${ev.start}~${ev.end}</span><span class="title">${ev.title}</span>`;
+      listEl.appendChild(row);
+    });
+  }
+
+  async function loadRoomSchedule() {
+    if (!roomTabsBuilt) renderRoomTabs(); // 탭은 최초 1회만
+    const listEl = document.getElementById('rentalList');
+    if (RENTAL_API_URL.indexOf('http') !== 0) {
+      // 아직 GAS URL이 안 채워진 상태 — 배포 전 임시 안내
+      listEl.innerHTML = '<div class="empty-note">GAS 배포 URL이 아직 설정되지 않았습니다.</div>';
+      return;
+    }
+    listEl.innerHTML = '<div class="empty-note">불러오는 중...</div>';
+    try {
+      const res = await fetch(RENTAL_API_URL);
+      const data = await res.json();
+      if (!data.success) {
+        listEl.innerHTML = '<div class="empty-note">일정 조회에 실패했습니다.</div>';
+        return;
+      }
+      roomSchedule = data.rooms;
+      renderRoomList();
+    } catch (e) {
+      console.error(e);
+      listEl.innerHTML = '<div class="empty-note">서버 연결에 실패했습니다.</div>';
+    }
+  }
+</script>
+
+</body>
+</html>
