@@ -203,20 +203,20 @@
   .slot-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: 14px;
     width: 100%;
     max-width: min(92vw, 640px);
   }
   .slot-btn {
-    padding: 10px 4px;
+    padding: 26px 4px;
     border: none;
     border-radius: 10px;
     font-family: 'Do Hyeon', sans-serif;
     color: #fff;
     text-align: center;
   }
-  .slot-btn .t { font-size: 15px; display: block; }
-  .slot-btn .c { font-size: 11px; display: block; opacity: 0.9; font-family: sans-serif; }
+  .slot-btn .t { font-size: 22px; display: block; margin-bottom: 4px; }
+  .slot-btn .c { font-size: 15px; display: block; opacity: 0.9; font-family: sans-serif; }
   .slot-btn.available { background: var(--primary); }
   .slot-btn.full { background: #ccc; color: #888; }
   .slot-btn.passed { background: #eee; color: #bbb; }
@@ -828,7 +828,8 @@
       const isFull = s.remaining <= 0;
       const btn = document.createElement('button');
       btn.className = 'slot-btn ' + (isPassed ? 'passed' : (isFull ? 'full' : 'available'));
-      btn.innerHTML = `<span class="t">${timeLabel}</span><span class="c">${isPassed ? '마감' : (s.remaining + '/' + s.capacity)}</span>`;
+      const countLabel = isPassed ? '마감' : (isFull ? '마감' : `남은자리 ${s.remaining}`); // "4/4"처럼 헷갈리는 표기 대신 명확하게
+      btn.innerHTML = `<span class="t">${timeLabel}</span><span class="c">${countLabel}</span>`;
       if (slotCheckMode) {
         // 직원 확인모드: 정원 상관없이 모든(지나지 않은) 슬롯을 누르면 예약자 확인
         if (!isPassed) {
