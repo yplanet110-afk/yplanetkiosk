@@ -709,6 +709,16 @@
     return t.slice(0, 5);
   }
 
+  // 'HH:MM' 슬롯 시작시각 → 30분 뒤(=슬롯 종료시각) 'HH:MM'으로. 마감 판단은 시작이 아니라 종료 기준이어야 함
+  // (12시 슬롯은 12시~12시30분 '이용 중'이므로, 12시 5분에도 아직 마감이 아님)
+  function addThirtyMinutes(hm) {
+    const [h, m] = hm.split(':').map(Number);
+    const total = h * 60 + m + 30;
+    const hh = String(Math.floor(total / 60) % 24).padStart(2, '0');
+    const mm = String(total % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
   async function loadSlots() {
     if (!supabaseClient) return;
     const todayStr = getTodaySeoul();
@@ -762,7 +772,7 @@
     const nowHM = getNowSeoulHM();
     info.slots.forEach(s => {
       const timeLabel = formatSlotTime(s.slot_start);
-      const isPassed = timeLabel < nowHM; // 문자열 비교로 충분 ('HH:MM' 포맷 고정)
+      const isPassed = addThirtyMinutes(timeLabel) <= nowHM; // 슬롯 '종료' 시각이 지나야 진짜 마감 (이용 중인 슬롯은 마감 아님)
       const isFull = s.remaining <= 0;
       const btn = document.createElement('button');
       btn.className = 'slot-btn ' + (isPassed ? 'passed' : (isFull ? 'full' : 'available'));
