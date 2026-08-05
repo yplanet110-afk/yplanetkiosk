@@ -163,6 +163,24 @@
   .gender-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
   /* ===== 기기예약 화면 ===== */
+  .check-mode-toggle {
+    width: 100%;
+    max-width: min(92vw, 640px);
+    padding: 10px 0;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    background: #f5f5f5;
+    color: #888;
+    border-radius: 8px;
+    font-family: sans-serif;
+    font-size: 13px;
+  }
+  .check-mode-toggle.active {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+    font-weight: bold;
+  }
   .device-tabs {
     display: flex;
     gap: 8px;
@@ -447,6 +465,7 @@
   </div>
 </div>
 <div id="screen-reserve" class="screen">
+  <button type="button" id="slotCheckToggle" class="check-mode-toggle">예약자 확인모드 (직원용)</button>
   <div id="deviceTabs" class="device-tabs"></div>
   <div id="slotGrid" class="slot-grid"></div>
   <div class="my-res-box">
@@ -522,6 +541,16 @@
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.screen === name);
     });
+    // 기기예약 탭이 아닌 곳으로 이동하면 직원 확인모드 자동 해제 (PIN이 계속 캐시된 채 남지 않게)
+    if (name !== 'reserve' && slotCheckMode) {
+      slotCheckMode = false;
+      slotCheckStaffPin = '';
+      const toggleBtn = document.getElementById('slotCheckToggle');
+      if (toggleBtn) {
+        toggleBtn.classList.remove('active');
+        toggleBtn.textContent = '예약자 확인모드 (직원용)';
+      }
+    }
     // 기기예약 탭 들어갈 때마다 잔여인원 최신값으로 새로고침
     if (name === 'reserve') loadSlots();
     // 대관현황 탭 들어갈 때마다 오늘 일정 새로고침
@@ -684,6 +713,29 @@
   let slotsByDevice = {};  // { '닌텐도': { device_id, slots: [{slot_start, capacity, remaining}] }, ... }
   let selectedDevice = null;
   let currentMemberPin = ''; // 내 예약 조회 성공 후, 재입력 없이 취소 버튼에 재사용
+  let slotCheckMode = false;   // 직원 확인모드 on/off
+  let slotCheckStaffPin = '';  // 확인모드 켤 때 받은 PIN — 켜있는 동안 슬롯마다 재입력 안 받고 재사용
+
+  document.getElementById('slotCheckToggle').addEventListener('click', () => {
+    const toggleBtn = document.getElementById('slotCheckToggle');
+    if (slotCheckMode) {
+      // 끄기: 세션에서 PIN도 같이 제거
+      slotCheckMode = false;
+      slotCheckStaffPin = '';
+      toggleBtn.classList.remove('active');
+      toggleBtn.textContent = '예약자 확인모드 (직원용)';
+      renderSlotGrid();
+    } else {
+      // 켜기 전에 직원 PIN 확인 (셔플+마스킹 — 관리자 PIN과 동일한 방식)
+      openPinModal('예약자 확인모드 진입용 직원 PIN을 입력해주세요', (pin) => {
+        slotCheckMode = true;
+        slotCheckStaffPin = pin;
+        toggleBtn.classList.add('active');
+        toggleBtn.textContent = '확인모드 켜짐 (다시 눌러서 끄기)';
+        renderSlotGrid();
+      }, { length: 8, shuffle: true, mask: true });
+    }
+  });
 
   // 오늘 날짜를 'YYYY-MM-DD'로 (서버와 동일하게 서울 기준)
   function getTodaySeoul() {
@@ -777,7 +829,14 @@
       const btn = document.createElement('button');
       btn.className = 'slot-btn ' + (isPassed ? 'passed' : (isFull ? 'full' : 'available'));
       btn.innerHTML = `<span class="t">${timeLabel}</span><span class="c">${isPassed ? '마감' : (s.remaining + '/' + s.capacity)}</span>`;
-      if (!isPassed && !isFull) {
+      if (slotCheckMode) {
+        // 직원 확인모드: 정원 상관없이 모든(지나지 않은) 슬롯을 누르면 예약자 확인
+        if (!isPassed) {
+          btn.addEventListener('click', () => checkSlotMembers(info.device_id, s.slot_start, timeLabel, slotCheckStaffPin));
+        } else {
+          btn.disabled = true;
+        }
+      } else if (!isPassed && !isFull) {
         btn.style.background = DEVICE_COLORS[selectedDevice] || 'var(--primary)'; // 기기별 색상
         btn.addEventListener('click', () => {
           openPinModal('예약할 회원번호를 입력해주세요', (pin) => reserveSlot(info.device_id, s.slot_start, pin));
@@ -800,7 +859,19 @@
       p_staff_pin: staffPin, p_device_id: deviceId, p_slot_date: getTodaySeoul(), p_slot_start: slotStart
     });
     if (error) { showResult('오류가 발생했습니다.'); console.error(error); return; }
-    if (data.success === false) { showResult(data.error); return; }
+    if (data.success === false) {
+      showResult(data.error);
+      if ((data.error || '').indexOf('PIN') !== -1) {
+        // PIN 자체가 틀렸으면 확인모드도 같이 꺼서, 틀린 PIN이 캐시된 채 계속 남지 않게 함
+        slotCheckMode = false;
+        slotCheckStaffPin = '';
+        const toggleBtn = document.getElementById('slotCheckToggle');
+        toggleBtn.classList.remove('active');
+        toggleBtn.textContent = '예약자 확인모드 (직원용)';
+        renderSlotGrid();
+      }
+      return;
+    }
     const names = data.names && data.names.length > 0 ? data.names.join(', ') : '(예약자 없음)';
     showResult(timeLabel + ' 예약자\n' + names);
   }
