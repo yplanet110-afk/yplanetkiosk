@@ -40,11 +40,11 @@
   }
   #tabbar button {
     flex: 1;
-    padding: 16px 0;
+    padding: 20px 0;
     border: none;
     background: none;
     font-family: 'Do Hyeon', sans-serif;
-    font-size: 18px;
+    font-size: 22px;
     color: #999;
     cursor: pointer;
   }
@@ -124,40 +124,41 @@
     text-align: center;
     max-width: min(90vw, 460px);
   }
-  #resultPopup .box p { font-size: 18px; color: #333; white-space: pre-line; } /* \n 을 실제 줄바꿈으로 표시 */
+  #resultPopup .box p { font-size: 22px; color: #333; white-space: pre-line; } /* \n 을 실제 줄바꿈으로 표시 */
   #resultPopup .box button {
     margin-top: 12px;
-    padding: 10px 24px;
+    padding: 14px 32px;
     background: var(--primary);
     color: #fff;
     border: none;
     border-radius: 8px;
     font-family: 'Do Hyeon', sans-serif;
+    font-size: 17px;
   }
 
   .placeholder { color: #aaa; font-size: 16px; margin-top: 60px; }
 
   /* 회원가입 폼 */
-  .form-label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-family: sans-serif; }
+  .form-label { display: block; font-size: 15px; color: #666; margin-bottom: 6px; font-family: sans-serif; }
   .form-input {
     width: 100%;
-    padding: 10px 12px;
+    padding: 14px 16px;
     border: 1px solid var(--primary-light);
     border-radius: 8px;
-    font-size: 15px;
-    margin-bottom: 14px;
+    font-size: 18px;
+    margin-bottom: 18px;
     font-family: sans-serif;
     box-sizing: border-box;
   }
   .gender-btn {
     flex: 1;
-    padding: 10px 0;
+    padding: 14px 0;
     border: 1px solid var(--primary-light);
     background: #fff;
     color: var(--primary);
     border-radius: 8px;
     font-family: 'Do Hyeon', sans-serif;
-    font-size: 14px;
+    font-size: 17px;
   }
   .gender-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
@@ -409,7 +410,7 @@
 
 <!-- 출석체크 화면: 유일하게 이번 단계에서 실제 동작 구현 -->
 <div id="screen-checkin" class="screen active">
-  <div style="color: var(--accent); font-size: 20px; margin-top: 10px;">회원번호를 입력해주세요</div>
+  <div style="color: var(--accent); font-size: 26px; margin-top: 10px;">회원번호를 입력해주세요</div>
   <div id="pinDisplay">______</div>
   <div id="keypad"></div>
   <div style="margin-top: 14px; font-size: 13px; color: var(--primary);">
@@ -419,8 +420,8 @@
 
 <!-- 아래 3개 화면은 다음 단계에서 구현 예정, 지금은 자리만 -->
 <div id="screen-signup" class="screen">
-  <div style="color: var(--accent); font-size: 20px; margin: 10px 0 20px;">회원가입</div>
-  <div style="width: 280px;">
+  <div style="color: var(--accent); font-size: 26px; margin: 10px 0 20px;">회원가입</div>
+  <div style="width: min(85vw, 380px);">
     <label class="form-label">이름</label>
     <input type="text" id="su-name" class="form-input" placeholder="이름 입력">
 
@@ -428,21 +429,21 @@
     <input type="date" id="su-birth" class="form-input">
 
     <label class="form-label">성별</label>
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
+    <div style="display:flex; gap:8px; margin-bottom:18px;">
       <button type="button" class="gender-btn active" data-gender="남" onclick="selectGender('남')">남</button>
       <button type="button" class="gender-btn" data-gender="여" onclick="selectGender('여')">여</button>
     </div>
 
     <label class="form-label">원하는 회원번호(6자리)</label>
     <input type="text" id="su-memberno" class="form-input" maxlength="6" inputmode="numeric" placeholder="숫자 6자리">
-    <div id="su-error" style="color: var(--danger); font-size: 12px; margin: -8px 0 10px; display:none;"></div>
+    <div id="su-error" style="color: var(--danger); font-size: 14px; margin: -10px 0 12px; display:none;"></div>
 
-    <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; margin-bottom:20px;">
-      <input type="checkbox" id="su-consent" style="width:16px; height:16px;">
+    <label style="display:flex; align-items:center; gap:10px; font-size:16px; color:#333; margin-bottom:24px;">
+      <input type="checkbox" id="su-consent" style="width:20px; height:20px;">
       개인정보 제공에 동의합니다
     </label>
 
-    <button type="button" onclick="submitSignup()" style="width:100%; padding:14px 0; background: var(--success); color:#fff; border:none; border-radius:10px; font-family:'Do Hyeon',sans-serif; font-size:16px;">가입 완료</button>
+    <button type="button" onclick="submitSignup()" style="width:100%; padding:18px 0; background: var(--success); color:#fff; border:none; border-radius:10px; font-family:'Do Hyeon',sans-serif; font-size:19px;">가입 완료</button>
   </div>
 </div>
 <div id="screen-reserve" class="screen">
