@@ -81,31 +81,31 @@
     background: #fff;
     border: 3px solid var(--primary-light);
     border-radius: 12px;
-    font-size: 32px;
-    letter-spacing: 8px;
+    font-size: 40px;
+    letter-spacing: 10px;
     color: var(--primary);
-    padding: 16px 24px;
+    padding: 20px 28px;
     margin: 24px 0;
-    min-width: 220px;
+    min-width: min(80vw, 320px);
     text-align: center;
   }
   #keypad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    width: 260px;
+    gap: 14px;
+    width: min(80vw, 320px);
   }
   #keypad button {
-    padding: 20px 0;
-    font-size: 22px;
+    padding: 26px 0;
+    font-size: 28px;
     font-family: 'Do Hyeon', sans-serif;
     color: #fff;
     background: var(--primary-light);
     border: none;
     border-radius: 12px;
   }
-  #keypad button.clear { background: var(--danger); font-size: 14px; }
-  #keypad button.confirm { background: var(--success); font-size: 14px; }
+  #keypad button.clear { background: var(--danger); font-size: 16px; }
+  #keypad button.confirm { background: var(--success); font-size: 16px; }
 
   /* 결과 팝업 (출석 성공/실패 메시지) */
   #resultPopup {
@@ -122,7 +122,7 @@
     border-radius: 16px;
     padding: 32px;
     text-align: center;
-    max-width: 320px;
+    max-width: min(90vw, 460px);
   }
   #resultPopup .box p { font-size: 18px; color: #333; white-space: pre-line; } /* \n 을 실제 줄바꿈으로 표시 */
   #resultPopup .box button {
@@ -166,7 +166,7 @@
     display: flex;
     gap: 8px;
     width: 100%;
-    max-width: 420px;
+    max-width: min(92vw, 640px);
     margin-bottom: 16px;
   }
   .device-tab {
@@ -186,7 +186,7 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
     width: 100%;
-    max-width: 420px;
+    max-width: min(92vw, 640px);
   }
   .slot-btn {
     padding: 10px 4px;
@@ -204,7 +204,7 @@
 
   .my-res-box {
     width: 100%;
-    max-width: 420px;
+    max-width: min(92vw, 640px);
     margin-top: 20px;
     padding-top: 14px;
     border-top: 1px dashed var(--primary-light);
@@ -244,7 +244,7 @@
   /* ===== 대관현황 화면 ===== */
   #rentalList {
     width: 100%;
-    max-width: 420px;
+    max-width: min(92vw, 640px);
   }
   .rental-item {
     background: #fff;
@@ -287,12 +287,12 @@
     background: var(--bg);
     border: 2px solid var(--primary-light);
     border-radius: 10px;
-    font-size: 20px;
-    letter-spacing: 4px;
+    font-size: 26px;
+    letter-spacing: 5px;
     color: var(--primary);
-    padding: 10px 8px;
+    padding: 12px 8px;
     margin-bottom: 14px;
-    width: 220px;              /* 키패드(220px)랑 너비 맞춤 — 8자리에서 삐져나가던 문제 */
+    width: min(78vw, 300px);   /* 키패드랑 너비 맞춤 — 8자리에서 삐져나가던 문제 방지 */
     box-sizing: border-box;
     text-align: center;
     overflow: hidden;
@@ -300,12 +300,12 @@
   #pinModalKeypad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    width: 220px;
+    gap: 10px;
+    width: min(78vw, 300px);
   }
   #pinModalKeypad button {
-    padding: 14px 0;
-    font-size: 18px;
+    padding: 18px 0;
+    font-size: 22px;
     font-family: 'Do Hyeon', sans-serif;
     color: #fff;
     background: var(--primary-light);
@@ -331,7 +331,7 @@
     display: flex;
     gap: 16px;
     width: 100%;
-    max-width: 640px;
+    max-width: min(92vw, 900px);
     margin: 10px auto 0;
   }
   .admin-col {
@@ -586,8 +586,9 @@
       // RPC가 정상 응답했지만 로직상 실패 (예: 회원번호 없음, 오늘 이미 출석) → data.error에 메시지 들어있음
       showResult(data.error || '출석 처리에 실패했습니다.');
     } else {
-      // 성공: check_in이 돌려주는 필드는 name(이름), points_earned(획득포인트), messages(문구 배열)
+      // 성공: check_in이 돌려주는 필드는 name(이름), points_earned(획득포인트), balance(현재 총 잔액), messages(문구 배열)
       let msg = data.name + '님, 출석 완료! (+' + data.points_earned + 'P)';
+      msg += '\n현재 내 포인트: ' + data.balance + 'P'; // 애들이 자기 총점 모르는 문제 → 매번 출석할 때 같이 보여줌
       if (data.messages && data.messages.length > 0) {
         msg += '\n' + data.messages.join('\n'); // 생일축하·N번째방문·랜덤문구 등을 줄바꿈으로 이어붙임
       }
