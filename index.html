@@ -81,31 +81,31 @@
     background: #fff;
     border: 3px solid var(--primary-light);
     border-radius: 12px;
-    font-size: 40px;
-    letter-spacing: 10px;
+    font-size: 48px;
+    letter-spacing: 12px;
     color: var(--primary);
-    padding: 20px 28px;
+    padding: 22px 28px;
     margin: 24px 0;
-    min-width: min(80vw, 320px);
+    min-width: min(85vw, 480px);
     text-align: center;
   }
   #keypad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 14px;
-    width: min(80vw, 320px);
+    width: min(85vw, 480px);
   }
   #keypad button {
-    padding: 26px 0;
-    font-size: 28px;
+    padding: 32px 0;
+    font-size: 34px;
     font-family: 'Do Hyeon', sans-serif;
     color: #fff;
     background: var(--primary-light);
     border: none;
     border-radius: 12px;
   }
-  #keypad button.clear { background: var(--danger); font-size: 16px; }
-  #keypad button.confirm { background: var(--success); font-size: 16px; }
+  #keypad button.clear { background: var(--danger); font-size: 18px; }
+  #keypad button.confirm { background: var(--success); font-size: 18px; }
 
   /* 결과 팝업 (출석 성공/실패 메시지) */
   #resultPopup {
@@ -772,11 +772,27 @@
         btn.addEventListener('click', () => {
           openPinModal('예약할 회원번호를 입력해주세요', (pin) => reserveSlot(info.device_id, s.slot_start, pin));
         });
+      } else if (isFull) {
+        // 마감(회색) 슬롯: 예약 없이 쓰고 있는 아이가 있는지 직원이 확인할 수 있게 — 직원 PIN 확인 후 예약자 이름 표시
+        btn.addEventListener('click', () => {
+          openPinModal('예약자 확인용 직원 PIN을 입력해주세요', (pin) => checkSlotMembers(info.device_id, s.slot_start, timeLabel, pin), { length: 8, shuffle: true, mask: true });
+        });
       } else {
-        btn.disabled = true;
+        btn.disabled = true; // 이미 지난 시간대는 조회할 필요 없어서 그대로 비활성
       }
       grid.appendChild(btn);
     });
+  }
+
+  // 마감(회색) 슬롯을 직원이 눌렀을 때: 그 시간대 예약자 이름을 보여줌 (예약 없이 쓰는 아이 확인용)
+  async function checkSlotMembers(deviceId, slotStart, timeLabel, staffPin) {
+    const { data, error } = await supabaseClient.rpc('get_slot_members', {
+      p_staff_pin: staffPin, p_device_id: deviceId, p_slot_date: getTodaySeoul(), p_slot_start: slotStart
+    });
+    if (error) { showResult('오류가 발생했습니다.'); console.error(error); return; }
+    if (data.success === false) { showResult(data.error); return; }
+    const names = data.names && data.names.length > 0 ? data.names.join(', ') : '(예약자 없음)';
+    showResult(timeLabel + ' 예약자\n' + names);
   }
 
   async function reserveSlot(deviceId, slotStart, pin) {
