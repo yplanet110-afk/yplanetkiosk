@@ -342,6 +342,50 @@
     font-size: 13px;
   }
 
+  /* ===== 좌석 선택 모달 (기기예약에서 시간대 고른 다음 1~정원 번호 중 선택) ===== */
+  #seatModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+  }
+  #seatModal .box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+    max-width: min(90vw, 420px);
+  }
+  #seatModal .title { color: var(--accent); font-size: 18px; margin-bottom: 16px; }
+  #seatModalGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    width: min(80vw, 320px);
+  }
+  .seat-btn {
+    padding: 22px 0;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Do Hyeon', sans-serif;
+    color: #fff;
+    text-align: center;
+  }
+  .seat-btn .t { font-size: 22px; display: block; margin-bottom: 4px; }
+  .seat-btn .c { font-size: 14px; display: block; opacity: 0.9; font-family: sans-serif; }
+  .seat-btn.taken { background: #ccc; color: #888; }
+  #seatModalCancelBtn {
+    margin-top: 16px;
+    background: none;
+    border: none;
+    color: #999;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 13px;
+  }
+
   /* ===== 관리자모드 화면 ===== */
   #screen-admin {
     align-items: stretch !important; /* 좌우 2단 배치를 위해 상위 .screen.active의 center 정렬 해제 */
@@ -497,6 +541,15 @@
     </div>
   </div>
   <button type="button" id="adminBackBtn">← 나가기</button>
+</div>
+
+<!-- 좌석 선택 모달: 기기예약 시간대를 고른 다음, 1~정원 번호 중 빈 자리를 고르는 단계 -->
+<div id="seatModal">
+  <div class="box">
+    <div class="title" id="seatModalTitle">자리를 선택해주세요</div>
+    <div id="seatModalGrid"></div>
+    <button id="seatModalCancelBtn" type="button">취소</button>
+  </div>
 </div>
 
 <!-- 회원번호(PIN) 입력 모달: 기기예약 확정 / 내 예약 조회 시 공용으로 사용 -->
@@ -833,19 +886,19 @@
       if (slotCheckMode) {
         // 직원 확인모드: 정원 상관없이 모든(지나지 않은) 슬롯을 누르면 예약자 확인
         if (!isPassed) {
-          btn.addEventListener('click', () => checkSlotMembers(info.device_id, s.slot_start, timeLabel, slotCheckStaffPin));
+          btn.addEventListener('click', () => checkSlotMembers(info.device_id, s.slot_start, timeLabel, s.capacity, slotCheckStaffPin));
         } else {
           btn.disabled = true;
         }
       } else if (!isPassed && !isFull) {
         btn.style.background = DEVICE_COLORS[selectedDevice] || 'var(--primary)'; // 기기별 색상
         btn.addEventListener('click', () => {
-          openPinModal('예약할 회원번호를 입력해주세요', (pin) => reserveSlot(info.device_id, s.slot_start, pin));
+          openSeatModal(info.device_id, s.slot_start, timeLabel, s.capacity);
         });
       } else if (isFull) {
         // 마감(회색) 슬롯: 예약 없이 쓰고 있는 아이가 있는지 직원이 확인할 수 있게 — 직원 PIN 확인 후 예약자 이름 표시
         btn.addEventListener('click', () => {
-          openPinModal('예약자 확인용 직원 PIN을 입력해주세요', (pin) => checkSlotMembers(info.device_id, s.slot_start, timeLabel, pin), { length: 8, shuffle: true, mask: true });
+          openPinModal('예약자 확인용 직원 PIN을 입력해주세요', (pin) => checkSlotMembers(info.device_id, s.slot_start, timeLabel, s.capacity, pin), { length: 8, shuffle: true, mask: true });
         });
       } else {
         btn.disabled = true; // 이미 지난 시간대는 조회할 필요 없어서 그대로 비활성
@@ -854,8 +907,8 @@
     });
   }
 
-  // 마감(회색) 슬롯을 직원이 눌렀을 때: 그 시간대 예약자 이름을 보여줌 (예약 없이 쓰는 아이 확인용)
-  async function checkSlotMembers(deviceId, slotStart, timeLabel, staffPin) {
+  // 마감(회색) 슬롯을 직원이 눌렀을 때: 그 시간대 좌석별 예약자 이름을 보여줌 (예약 없이 쓰는 아이 확인용)
+  async function checkSlotMembers(deviceId, slotStart, timeLabel, capacity, staffPin) {
     const { data, error } = await supabaseClient.rpc('get_slot_members', {
       p_staff_pin: staffPin, p_device_id: deviceId, p_slot_date: getTodaySeoul(), p_slot_start: slotStart
     });
@@ -873,14 +926,20 @@
       }
       return;
     }
-    const names = data.names && data.names.length > 0 ? data.names.join(', ') : '(예약자 없음)';
-    showResult(timeLabel + ' 예약자\n' + names);
+    // capacity만큼 좌석 전체를 나열하고, 예약된 자리엔 이름을 채워넣음 (빈자리는 명시적으로 표시)
+    const bySeat = {};
+    data.seats.forEach(s => { bySeat[s.seat_no] = s.name; });
+    const lines = [];
+    for (let n = 1; n <= capacity; n++) {
+      lines.push(n + '번: ' + (bySeat[n] || '(빈자리)'));
+    }
+    showResult(timeLabel + ' 좌석 현황\n' + lines.join('\n'));
   }
 
-  async function reserveSlot(deviceId, slotStart, pin) {
+  async function reserveSlot(deviceId, slotStart, seatNo, pin) {
     const todayStr = getTodaySeoul();
     const { data, error } = await supabaseClient.rpc('create_reservation', {
-      p_member_no: pin, p_device_id: deviceId, p_slot_date: todayStr, p_slot_start: slotStart
+      p_member_no: pin, p_device_id: deviceId, p_slot_date: todayStr, p_slot_start: slotStart, p_seat_no: seatNo
     });
     if (error) {
       showResult('오류가 발생했습니다. 직원에게 문의해주세요.');
@@ -890,6 +949,43 @@
     showResult(data.success ? data.message : data.error);
     loadSlots(); // 잔여인원 갱신
   }
+
+  // ===== 좌석 선택 모달 =====
+  async function openSeatModal(deviceId, slotStart, timeLabel, capacity) {
+    const { data, error } = await supabaseClient.rpc('get_seat_status', {
+      p_device_id: deviceId, p_slot_date: getTodaySeoul(), p_slot_start: slotStart
+    });
+    if (error || data.success === false) {
+      showResult('좌석 정보를 불러오지 못했습니다.');
+      console.error(error || data.error);
+      return;
+    }
+    const takenSet = new Set(data.taken_seats);
+    document.getElementById('seatModalTitle').textContent = timeLabel + ' — 자리를 선택해주세요';
+    const seatGrid = document.getElementById('seatModalGrid');
+    seatGrid.innerHTML = '';
+    for (let n = 1; n <= capacity; n++) {
+      const btn = document.createElement('button');
+      const taken = takenSet.has(n);
+      btn.className = 'seat-btn' + (taken ? ' taken' : '');
+      btn.innerHTML = `<span class="t">${n}번</span><span class="c">${taken ? '이용중' : '빈자리'}</span>`;
+      if (!taken) {
+        btn.style.background = DEVICE_COLORS[selectedDevice] || 'var(--primary)';
+        btn.addEventListener('click', () => {
+          closeSeatModal();
+          openPinModal('예약할 회원번호를 입력해주세요', (pin) => reserveSlot(deviceId, slotStart, n, pin));
+        });
+      } else {
+        btn.disabled = true;
+      }
+      seatGrid.appendChild(btn);
+    }
+    document.getElementById('seatModal').style.display = 'flex';
+  }
+  function closeSeatModal() {
+    document.getElementById('seatModal').style.display = 'none';
+  }
+  document.getElementById('seatModalCancelBtn').addEventListener('click', closeSeatModal);
 
   // ===== 내 예약 조회 / 취소 =====
   document.getElementById('myResBtn').addEventListener('click', () => {
@@ -917,7 +1013,7 @@
     data.reservations.forEach(r => {
       const row = document.createElement('div');
       row.className = 'my-res-item';
-      row.innerHTML = `<span>${r.device} ${formatSlotTime(r.slot_start)}</span>`;
+      row.innerHTML = `<span>${r.device} ${formatSlotTime(r.slot_start)} (${r.seat_no}번 자리)</span>`;
       const cancelBtn = document.createElement('button');
       cancelBtn.textContent = '취소';
       cancelBtn.addEventListener('click', () => cancelMyReservation(r.id));
