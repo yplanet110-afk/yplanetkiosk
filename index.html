@@ -455,6 +455,16 @@
     font-family: 'Do Hyeon', sans-serif;
     font-size: 13px;
   }
+  .dup-group {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    text-align: left;
+  }
+  .dup-group .label { font-family: 'Do Hyeon', sans-serif; color: #b8860b; font-size: 14px; margin-bottom: 6px; }
+  .dup-group .member-line { font-family: sans-serif; font-size: 13px; color: #333; margin-bottom: 2px; }
 </style>
 </head>
 <body>
@@ -539,6 +549,11 @@
       <div class="empty-note" style="margin: 0 0 14px;">퀴즈 통과한 회원에게 오늘 예약 +1회 부여</div>
       <button type="button" id="bonusSubmitBtn" class="admin-action-btn bonus">보너스 부여</button>
     </div>
+  </div>
+  <div class="admin-col" style="max-width: min(92vw, 900px); margin: 16px auto 0;">
+    <h3>중복의심 회원 목록</h3>
+    <button type="button" id="dupCheckBtn" class="admin-action-btn" style="background: var(--accent);">조회하기</button>
+    <div id="dupResultBox" style="margin-top: 14px;"></div>
   </div>
   <button type="button" id="adminBackBtn">← 나가기</button>
 </div>
@@ -723,7 +738,16 @@
       return;
     }
 
+    // ★ 직원 PIN 확인 후에만 실제 가입 처리 (셀프가입으로 여러 계정 만드는 것 방지, 2026.08.05)
+    openPinModal('가입 승인용 직원 PIN을 입력해주세요', (staffPin) => {
+      finishSignup(name, birth, memberNo, consent, staffPin);
+    }, { length: 8, shuffle: true, mask: true });
+  }
+
+  async function finishSignup(name, birth, memberNo, consent, staffPin) {
+    const errorBox = document.getElementById('su-error');
     const { data, error } = await supabaseClient.rpc('sign_up_member', {
+      p_staff_pin: staffPin,
       p_name: name,
       p_birth_date: birth,
       p_gender: selectedGender,
@@ -738,7 +762,7 @@
       return;
     }
     if (data.success === false) {
-      // 회원번호 중복, 동의 안 함 등 sign_up_member가 돌려주는 에러 메시지 그대로 표시
+      // 회원번호 중복, 직원 PIN 오류 등 sign_up_member가 돌려주는 에러 메시지 그대로 표시
       errorBox.textContent = data.error;
       errorBox.style.display = 'block';
       return;
@@ -1128,15 +1152,56 @@
     bonusMemberNo = '';
     document.getElementById('snack-memberno-btn').textContent = '회원번호 입력하기';
     document.getElementById('bonus-memberno-btn').textContent = '회원번호 입력하기';
+    document.getElementById('dupResultBox').innerHTML = ''; // 나갈 때 조회 결과도 비움
     switchScreen('checkin');
   });
+
+  // ===== 중복의심 회원 목록 =====
+  document.getElementById('dupCheckBtn').addEventListener('click', async () => {
+    const box = document.getElementById('dupResultBox');
+    box.innerHTML = '<div class="empty-note">조회 중...</div>';
+    const { data, error } = await supabaseClient.rpc('get_suspected_duplicates', { p_staff_pin: adminStaffPin });
+    if (error) { box.innerHTML = '<div class="empty-note">조회에 실패했습니다.</div>'; console.error(error); return; }
+    if (data.success === false) {
+      box.innerHTML = `<div class="empty-note">${data.error}</div>`;
+      return;
+    }
+    renderDupGroups(box, data.by_birth_date, '생년월일 동일', g => g.birth_date);
+    renderDupGroups(box, data.by_name, '이름 동일', g => g.name, true);
+    if (data.by_birth_date.length === 0 && data.by_name.length === 0) {
+      box.innerHTML = '<div class="empty-note">현재 중복의심 회원이 없습니다.</div>';
+    }
+  });
+
+  function renderDupGroups(box, groups, labelPrefix, keyFn, append) {
+    if (!append) box.innerHTML = '';
+    groups.forEach(g => {
+      const div = document.createElement('div');
+      div.className = 'dup-group';
+      const memberLines = g.members.map(m =>
+        `${m.name || '(이름 없음)'} · ${m.member_no || ''} · ${m.birth_date || ''}${m.attended_today ? ' · 오늘 출석함' : ''}`
+      ).join('<br>');
+      div.innerHTML = `<div class="label">${labelPrefix}: ${keyFn(g)}</div><div class="member-line">${memberLines}</div>`;
+      box.appendChild(div);
+    });
+  }
 
   // 간식차감 회원번호: 보너스부여와 동일하게 키패드 모달로 입력
   let snackMemberNo = '';
   document.getElementById('snack-memberno-btn').addEventListener('click', () => {
-    openPinModal('간식 차감할 회원번호를 입력해주세요', (pin) => {
+    openPinModal('간식 차감할 회원번호를 입력해주세요', async (pin) => {
       snackMemberNo = pin;
-      document.getElementById('snack-memberno-btn').textContent = pin;
+      const btn = document.getElementById('snack-memberno-btn');
+      btn.textContent = pin + ' (확인 중...)';
+      // ★ 이름을 같이 보여줘서 직원이 신원(이상한 이름 등)을 바로 확인할 수 있게 함 (2026.08.05)
+      const { data, error } = await supabaseClient.rpc('get_member_name', {
+        p_staff_pin: adminStaffPin, p_member_no: pin
+      });
+      if (error || data.success === false) {
+        btn.textContent = pin + ' (이름 조회 실패)';
+        return;
+      }
+      btn.textContent = `${data.name} (${pin})`;
     }, { length: 6 });
   });
 
